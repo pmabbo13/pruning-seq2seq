@@ -88,7 +88,7 @@ if __name__ == '__main__':
     ft_model_name = f"{args.pretrained_model}-cnndm"
     ft_model_dir = f"./{ft_model_name}"
     print(f"New model will be named: {ft_model_name}")
-    args = Seq2SeqTrainingArguments(
+    train_args = Seq2SeqTrainingArguments(
         ft_model_dir,
         max_steps=args.train_steps,
         evaluation_strategy="steps",
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     metric = datasets.load_metric("rouge")
     trainer = Seq2SeqTrainer(
         model_init=orig_model,
-        args=args,
+        args=train_args,
         train_dataset=train_sample,
         eval_dataset=val_sample,
         data_collator=data_collator,
