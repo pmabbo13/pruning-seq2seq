@@ -113,7 +113,9 @@ if __name__ == '__main__':
     )
 
     # get original model and train/val samples
-    orig_model = AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
+    def model_init():
+        return AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
+    
     train_sample = processed_data["train"]
     val_sample = processed_data["validation"]
 
@@ -121,7 +123,7 @@ if __name__ == '__main__':
     data_collator = DataCollatorForSeq2Seq(tokenizer)
     metric = datasets.load_metric("rouge")
     trainer = Seq2SeqTrainer(
-        model_init=orig_model,
+        model_init=model_init,
         args=train_args,
         train_dataset=train_sample,
         eval_dataset=val_sample,
