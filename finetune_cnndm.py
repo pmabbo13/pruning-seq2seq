@@ -59,8 +59,6 @@ if __name__ == '__main__':
                         default=128, help='The batch size to be used for training')
     parser.add_argument('--learning_rate', dest='learning_rate', required=False,
                         default=.001, help='The learning rate to be used for training')
-    parser.add_argument('--train_steps', dest='train_steps', required=False,
-                        default=2e18, help='Maximum number of training steps')
     parser.add_argument('--save_steps', dest='save_steps', required=False,
                         default=5000, help='Number of steps of training until checkpoint if saved')
     args = parser.parse_args()
@@ -83,14 +81,13 @@ if __name__ == '__main__':
         batched=True
     )
 
-    print(f"Training args are:\n\tmodel:{args.pretrained_model}\n\tbatch_size:{args.batch_size}\n\tlearning_rate:{args.learning_rate}\n\ttrain_steps:{args.train_steps}\n\tsave_steps:{args.save_steps}")
+    print(f"Training args are:\n\tmodel:{args.pretrained_model}\n\tbatch_size:{args.batch_size}\n\tlearning_rate:{args.learning_rate}\n\tsave_steps:{args.save_steps}")
     # set up training arguments
     ft_model_name = f"{args.pretrained_model}-cnndm"
     ft_model_dir = f"./{ft_model_name}"
     print(f"New model will be named: {ft_model_name}")
     train_args = Seq2SeqTrainingArguments(
         ft_model_dir,
-        max_steps=args.train_steps,
         evaluation_strategy="steps",
         eval_steps=args.save_steps,
         logging_strategy="steps",
@@ -103,7 +100,7 @@ if __name__ == '__main__':
         per_device_eval_batch_size=args.batch_size,
         weight_decay=0.0,
         save_total_limit=2,
-        num_train_epochs=1,
+        num_train_epochs=1.0,
         predict_with_generate=True,
         fp16=True,
         gradient_checkpointing=True,
