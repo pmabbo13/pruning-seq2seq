@@ -81,6 +81,8 @@ if __name__ == '__main__':
         batched=True
     )
 
+    print(f"Training args are:\n\tmodel:{args.pretrained_model}\n\tbatch_size:{args.batch_size}\n\tlearning_rate:{args.learning_rate}\n\tsave_steps:{args.save_steps}")
+    print(f"New model will be named: {ft_model_name}")
     # set up training arguments
     ft_model_name = f"{args.pretrained_model}-cnndm"
     ft_model_dir = f"./{ft_model_name}"
@@ -97,7 +99,7 @@ if __name__ == '__main__':
         gradient_accumulation_steps=args.batch_size/4,
         per_device_eval_batch_size=args.batch_size,
         weight_decay=0.0,
-        save_total_limit=3,
+        save_total_limit=2,
         num_train_epochs=1,
         predict_with_generate=True,
         fp16=True,
@@ -125,5 +127,5 @@ if __name__ == '__main__':
         compute_metrics=compute_metrics
     )
 
-    result = trainer.train()
-    print(result)
+    trainer.train()
+    #print(result)
