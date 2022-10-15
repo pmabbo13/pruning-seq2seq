@@ -20,7 +20,7 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, examp
     model_inputs["labels"] = labels["input_ids"]
     return model_inputs
 
-def compute_metrics(tokenizer, metric, eval_pred):
+def compute_metrics(eval_pred):
     predictions, labels = eval_pred
     decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
     
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     parser.add_argument('--learning_rate', dest='learning_rate', required=False,
                         default=.001, help='The learning rate to be used for training')
     parser.add_argument('--save_steps', dest='save_steps', required=False,
-                        default=5000, help='Number of steps of training until checkpoint if saved')
+                        default=100, help='Number of steps of training until checkpoint if saved')
     args = parser.parse_args()
 
     is_t5 = args.pretrained_model[:3] == 't5-'
@@ -99,8 +99,8 @@ if __name__ == '__main__':
         gradient_accumulation_steps=args.batch_size/4,
         per_device_eval_batch_size=args.batch_size,
         weight_decay=0.0,
-        save_total_limit=2,
-        num_train_epochs=1.0,
+        save_total_limit=1,
+        num_train_epochs=1,
         predict_with_generate=True,
         fp16=True,
         gradient_checkpointing=True,
