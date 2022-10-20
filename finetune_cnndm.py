@@ -16,7 +16,7 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, examp
     # Setup the tokenizer for targets
     with tokenizer.as_target_tokenizer():
         labels = tokenizer(examples["highlights"], padding="longest", max_length=max_target_length, truncation=True, return_tensors="pt").input_ids
-        labels[labels == tokenizer.pad_token_id] = -100
+        #labels[labels == tokenizer.pad_token_id] = -100
 
     model_inputs["labels"] = labels
     return model_inputs
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     def model_init():
         return AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
     
-    train_sample = processed_data["train"].select(range(76800))
+    train_sample = processed_data["train"].select(range(38400))
     val_sample = processed_data["validation"]
 
     # train model
