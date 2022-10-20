@@ -11,13 +11,14 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSe
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, examples):
     inputs = [prefix + doc for doc in examples["article"]]
-    model_inputs = tokenizer(inputs, max_length=max_input_length, truncation=True)
+    model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt")
 
     # Setup the tokenizer for targets
     with tokenizer.as_target_tokenizer():
-        labels = tokenizer(examples["highlights"], max_length=max_target_length, truncation=True)
+        labels = tokenizer(examples["highlights"], padding="longest", max_length=max_target_length, truncation=True, return_tensors="pt").input_ids
+        labels[labels == tokenizer.pad_token_id] = -100
 
-    model_inputs["labels"] = labels["input_ids"]
+    model_inputs["labels"] = labels
     return model_inputs
 
 def compute_metrics(eval_pred):
@@ -54,13 +55,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--orig_model', dest='pretrained_model', required=True,
                         choices=['t5-base', 't5-large', 'bart', 'bart-large'],
-                        help='The name of the pre-trained model to fine-tune.')
+                        help='The name of the pre-trained model to fine-tune.',
+                        type=str)
     parser.add_argument('--batch_size', dest='batch_size', required=False,
-                        default=128, help='The batch size to be used for training')
+                        default=128, help='The batch size to be used for training',
+                        type=int)
     parser.add_argument('--learning_rate', dest='learning_rate', required=False,
-                        default=.001, help='The learning rate to be used for training')
+                        default=1e-4, help='The learning rate to be used for training',
+                        type=float)
     parser.add_argument('--save_steps', dest='save_steps', required=False,
-                        default=100, help='Number of steps of training until checkpoint if saved')
+                        default=100, help='Number of steps of training until checkpoint if saved',
+                        type=int)
     args = parser.parse_args()
 
     is_t5 = args.pretrained_model[:3] == 't5-'
@@ -69,23 +74,18 @@ if __name__ == '__main__':
     raw_data = datasets.load_dataset('cnn_dailymail', '3.0.0')
 
     # Pre-process data
-    prefix = 'summarize' if is_t5 else ""
+    prefix = 'summarize: ' if is_t5 else ""
     max_input_length = 512
-    max_target_length = 64
+    max_target_length = 128
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model)
-    clean_data = raw_data.filter(
-        lambda example: len(example['article']) >= max_input_length and len(example['highlights']) >= max_target_length
-    )
-    processed_data = clean_data.map(
+    processed_data = raw_data.map(
         partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length),
         batched=True
     )
 
-    print(f"Training args are:\n\tmodel:{args.pretrained_model}\n\tbatch_size:{args.batch_size}\n\tlearning_rate:{args.learning_rate}\n\tsave_steps:{args.save_steps}")
     # set up training arguments
     ft_model_name = f"{args.pretrained_model}-cnndm"
     ft_model_dir = f"./{ft_model_name}"
-    print(f"New model will be named: {ft_model_name}")
     train_args = Seq2SeqTrainingArguments(
         ft_model_dir,
         evaluation_strategy="steps",
@@ -95,6 +95,8 @@ if __name__ == '__main__':
         save_strategy="steps",
         save_steps=args.save_steps,
         learning_rate=args.learning_rate,
+        optim="adafactor",
+        lr_scheduler_type="constant",
         per_device_train_batch_size=4,
         gradient_accumulation_steps=args.batch_size/4,
         per_device_eval_batch_size=args.batch_size,
@@ -113,7 +115,7 @@ if __name__ == '__main__':
     def model_init():
         return AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
     
-    train_sample = processed_data["train"]
+    train_sample = processed_data["train"].select(range(76800))
     val_sample = processed_data["validation"]
 
     # train model
@@ -129,5 +131,7 @@ if __name__ == '__main__':
         compute_metrics=compute_metrics
     )
 
+    print(f"Training args are:\n\tmodel:{args.pretrained_model}\n\tbatch_size:{args.batch_size}\n\tlearning_rate:{args.learning_rate}\n\tsave_steps:{args.save_steps}")
+    print(f"New model will be named: {ft_model_name}")
+
     trainer.train()
-    #print(result)
