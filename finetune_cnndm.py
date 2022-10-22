@@ -58,13 +58,13 @@ if __name__ == '__main__':
                         help='The name of the pre-trained model to fine-tune.',
                         type=str)
     parser.add_argument('--batch_size', dest='batch_size', required=False,
-                        default=128, help='The batch size to be used for training',
+                        default=8, help='The batch size to be used for training',
                         type=int)
     parser.add_argument('--learning_rate', dest='learning_rate', required=False,
-                        default=1e-4, help='The learning rate to be used for training',
+                        default=1e-5, help='The learning rate to be used for training',
                         type=float)
     parser.add_argument('--save_steps', dest='save_steps', required=False,
-                        default=100, help='Number of steps of training until checkpoint if saved',
+                        default=50, help='Number of steps of training until checkpoint if saved',
                         type=int)
     args = parser.parse_args()
 
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     def model_init():
         return AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
     
-    train_sample = processed_data["train"].select(range(38400))
+    train_sample = processed_data["train"].select(range(4800))
     val_sample = processed_data["validation"]
 
     # train model
