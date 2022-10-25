@@ -3,6 +3,7 @@ import copy
 import math
 import numpy as np
 import pandas as pd
+import os
 
 from functools import partial
 from tqdm import tqdm
@@ -10,6 +11,7 @@ from time import time
 
 import torch
 import torch.nn as nn
+from torch.utils.data.dataloader import default_collate
 import nltk
 nltk.download('punkt')
 
@@ -17,14 +19,14 @@ import datasets
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 
-def preprocessData(tokenizer, prefix, max_input_length, max_target_length, examples):
+def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
     inputs = [prefix + doc for doc in examples["article"]]
-    model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt")
+    model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt").to(device)
 
     # Setup the tokenizer for targets
     with tokenizer.as_target_tokenizer():
         labels = tokenizer(examples["highlights"], padding="longest", max_length=max_target_length, truncation=True, return_tensors="pt").input_ids
-        #labels[labels == tokenizer.pad_token_id] = -100
+        labels = labels.to(device)
 
     model_inputs["labels"] = labels
     return model_inputs
@@ -51,8 +53,8 @@ def compute_metrics(metric, eval_pred):
     result = {key: value.mid.fmeasure * 100 for key, value in result.items()}
     
     # Add mean generated length to metrics
-    prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id)
-                      for pred in predictions]
+    predictions = [pred.to('cpu') for pred in predictions]
+    prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in predictions]
     result["gen_len"] = np.mean(prediction_lens)
     
     return {k: round(v, 4) for k, v in result.items()}
@@ -88,6 +90,9 @@ def getPrunedModel(orig_model, is_t5, remove):
     else:
         new_model.model.decoder.layers = new_dec_layers
         assert len(new_model.model.decoder.layers) + len(remove_layers) == len(orig_model.model.decoder.layers)
+    
+    new_model = new_model.to(orig_model.device)
+    new_model.eval()
 
     return new_model
 
@@ -96,9 +101,7 @@ def count_parameters(model):
 
 
 def evaluate_model(model, test_data, batch_size, max_target_length):
-    
-    DEVICE = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    
+
     # prepare dataloader
     test_data.set_format(type='torch', columns=['input_ids', 'attention_mask'])
     dataloader = torch.utils.data.DataLoader(test_data, batch_size=batch_size)
@@ -117,10 +120,21 @@ def evaluate_model(model, test_data, batch_size, max_target_length):
     all_predictions = []
     if torch.cuda.is_available():
         start.record()
-    for i,batch in tqdm(enumerate(dataloader)):
-        predictions = model.generate(**batch, max_length=max_target_length)
+    for batch in tqdm(dataloader, desc="Generating predictions..."):
+        input_ids = batch['input_ids'].to(model.device)
+        attention_mask = batch['attention_mask'].to(model.device)
+        predictions = model.generate(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            early_stopping=True,
+            length_penalty= 2.0,
+            max_length=max_target_length,
+            min_length=30,
+            no_repeat_ngram_size=3,
+            num_beams=4
+        )
         all_predictions.append(predictions)
-    
+
     if torch.cuda.is_available():
         end.record()
         torch.cuda.synchronize()
@@ -149,7 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', dest='model', required=False,
                         default="all",
                         help='The name of the finetuned model to evaluate.',
-                        type=list)
+                        type=str)
     parser.add_argument('--pruning_schedule', dest='pruning_schedule', required=False,
                         default=[0.0],
                         help='The pruning schedule; list of floats representing percentage of layers to prune and evaluate.',
@@ -169,7 +183,14 @@ if __name__ == '__main__':
         #  Load Model and Tokenize
         tokenizer = AutoTokenizer.from_pretrained(finetuned_model)
         model = AutoModelForSeq2SeqLM.from_pretrained(finetuned_model)
-        is_t5 = 't5-' == finetuned_model.split("/")[1][:3]
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        model = model.to(device)
+        model = model.eval()
+        
+        if '/' in finetuned_model:
+            is_t5 = 't5-' == finetuned_model.split("/")[1][:3] 
+        else:
+            is_t5 = 't5-' == finetuned_model[:3]
 
         # Load raw data
         raw_data = datasets.load_dataset('cnn_dailymail', '3.0.0', split="test")
@@ -177,12 +198,11 @@ if __name__ == '__main__':
         # Pre-process data
         prefix = 'summarize: ' if is_t5 else ""
         max_input_length = 512
-        max_target_length = 128
+        max_target_length = 200
         test_data = raw_data.map(
-            partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length),
+            partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length, device),
             batched=True
         )
-        test_data = test_data
 
         for remove in args.pruning_schedule:
 
@@ -192,9 +212,14 @@ if __name__ == '__main__':
                 pruned_model = getPrunedModel(model, is_t5, remove)
 
             results = evaluate_model(pruned_model, test_data, args.batch_size, max_target_length)
+            
+            if not os.path.isdir("results"):
+                os.makedirs("results")
 
             filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
-            filename += '_' + str(remove) if remove != 0 else '_baseline'
-            pd.Series(results).to_csv(f'{filename}.csv')
-
-            print(f"Completed eval of {filename}. Results are...\n\t{results}")
+            filename += '-' + str(remove) if remove != 0 else '-baseline'
+            pd.Series(results).to_csv(f'results/{filename}.csv')
+            print(f"Completed eval of {filename}. Results are...")
+            for key, val in results.items():
+                print(f"\t{key}: {val}")
+            print(f"Results saved in results/{filename}.csv")
