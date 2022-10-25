@@ -64,7 +64,7 @@ if __name__ == '__main__':
                         default=1e-5, help='The learning rate to be used for training',
                         type=float)
     parser.add_argument('--save_steps', dest='save_steps', required=False,
-                        default=50, help='Number of steps of training until checkpoint if saved',
+                        default=3418, help='Number of steps of training until checkpoint if saved',
                         type=int)
     args = parser.parse_args()
 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
     # Pre-process data
     prefix = 'summarize: ' if is_t5 else ""
     max_input_length = 512
-    max_target_length = 128
+    max_target_length = 200
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model)
     processed_data = raw_data.map(
         partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length),
@@ -102,7 +102,7 @@ if __name__ == '__main__':
         per_device_eval_batch_size=args.batch_size,
         weight_decay=0.0,
         save_total_limit=1,
-        num_train_epochs=1,
+        num_train_epochs=2,
         predict_with_generate=True,
         fp16=True,
         gradient_checkpointing=True,
@@ -115,7 +115,7 @@ if __name__ == '__main__':
     def model_init():
         return AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
     
-    train_sample = processed_data["train"].select(range(4800))
+    train_sample = processed_data["train"]
     val_sample = processed_data["validation"]
 
     # train model
