@@ -8,6 +8,7 @@ import os
 from functools import partial
 from tqdm import tqdm
 from time import time
+from typing import List
 
 import torch
 import torch.nn as nn
@@ -30,6 +31,7 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, devic
 
     model_inputs["labels"] = labels
     return model_inputs
+
 
 def compute_metrics(metric, eval_pred):
     predictions, labels = eval_pred
@@ -60,7 +62,7 @@ def compute_metrics(metric, eval_pred):
     return {k: round(v, 4) for k, v in result.items()}
 
 
-def getLayersForRemoval(model, is_t5, remove):
+def CrossAttentionRemoval(model, is_t5, remove, strategy):
     
     layer_weights = []
     num_layers = model.config.num_decoder_layers if is_t5 else model.config.decoder_layers
@@ -69,16 +71,39 @@ def getLayersForRemoval(model, is_t5, remove):
             weight = model.state_dict()[f"decoder.block.{i}.layer.1.EncDecAttention.o.weight"]
         else:
             weight = model.state_dict()[f"model.decoder.layers.{i}.encoder_attn.out_proj.weight"]
-        avg_abs_weight = torch.mean(torch.abs(weight)).item()
-        layer_weights.append((i, avg_abs_weight))
+        
+        if strategy == 'mag':
+            avg_abs_weight = torch.mean(torch.abs(weight)).item()
+            layer_weights.append((i, avg_abs_weight))
+        elif strategy == 'var':
+            var_weights = torch.var(weight).item()
+            layer_weights.append((i, var_weight))
+        else:
+            print(f"Wrong input for type. Expected 'mag' or 'var', received '{strategy}''.")
+            return
+    
     layer_weights.sort(key = lambda x: x[1])
     excl_layers = math.ceil(num_layers * remove)
     remove_layers = set([l for l, a in layer_weights[:excl_layers]])
     return remove_layers
+
+
+def TopRemoval(model, is_t5, remove):
+    num_layers = model.config.num_decoder_layers if is_t5 else model.config.decoder_layers
+    excl_layers = math.ceil(num_layers * remove)
+    remove_layers = set(range(excl_layers))
+    return remove_layers
+
     
-def getPrunedModel(orig_model, is_t5, remove):
+def getPrunedModel(orig_model, is_t5, remove, strategy):
     
-    remove_layers = getLayersForRemoval(orig_model, is_t5, remove)
+    if strategy == 'ca-mag':
+        remove_layers = CrossAttentionRemoval(orig_model, is_t5, remove, 'mag')
+    elif strategy == 'ca-var':
+        remove_layers = CrossAttentionRemoval(orig_model, is_t5, remove, 'var')
+    else:
+        assert strategy == 'top'
+        remove_layer = TopRemoval(orig_model, is_t5, remove)
     
     current_dec_layers = orig_model.decoder.block if is_t5 else orig_model.model.decoder.layers
     new_dec_layers = nn.ModuleList([current_dec_layers[i] for i in range(len(current_dec_layers)) if i not in remove_layers])
@@ -95,6 +120,7 @@ def getPrunedModel(orig_model, is_t5, remove):
     new_model.eval()
 
     return new_model
+
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
@@ -164,10 +190,16 @@ if __name__ == '__main__':
                         default="all",
                         help='The name of the finetuned model to evaluate.',
                         type=str)
+    parser.add_argument('--pruning_strategy', dest='pruning_strategy', required=False,
+                        default='ca-mag',
+                        choices=['ca-mag', 'ca-var', 'top'],
+                        help='The pruning strategy to use.',
+                        type=str)
     parser.add_argument('--pruning_schedule', dest='pruning_schedule', required=False,
                         default=[0.0],
                         help='The pruning schedule; list of floats representing percentage of layers to prune and evaluate.',
-                        type=list)
+                        nargs="+",
+                        type=float)
     parser.add_argument('--batch_size', dest='batch_size', required=False,
                         default=8, help='The batch size to be used for eval',
                         type=int)
@@ -209,7 +241,7 @@ if __name__ == '__main__':
             if remove == 0:
                 pruned_model = model
             else:
-                pruned_model = getPrunedModel(model, is_t5, remove)
+                pruned_model = getPrunedModel(model, is_t5, remove, args.pruning_strategy)
 
             results = evaluate_model(pruned_model, test_data, args.batch_size, max_target_length)
             
@@ -217,7 +249,7 @@ if __name__ == '__main__':
                 os.makedirs("results")
 
             filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
-            filename += '-' + str(remove) if remove != 0 else '-baseline'
+            filename += f'-{args.pruning_strategy}-' + str(remove) if remove != 0 else '-baseline'
             pd.Series(results).to_csv(f'results/{filename}.csv')
             print(f"Completed eval of {filename}. Results are...")
             for key, val in results.items():
