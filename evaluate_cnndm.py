@@ -103,7 +103,7 @@ def getPrunedModel(orig_model, is_t5, remove, strategy):
         remove_layers = CrossAttentionRemoval(orig_model, is_t5, remove, 'var')
     else:
         assert strategy == 'top'
-        remove_layer = TopRemoval(orig_model, is_t5, remove)
+        remove_layers = TopRemoval(orig_model, is_t5, remove)
     
     current_dec_layers = orig_model.decoder.block if is_t5 else orig_model.model.decoder.layers
     new_dec_layers = nn.ModuleList([current_dec_layers[i] for i in range(len(current_dec_layers)) if i not in remove_layers])
