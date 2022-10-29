@@ -3,6 +3,7 @@ import copy
 import math
 import numpy as np
 import pandas as pd
+import pickle
 import os
 
 from functools import partial
@@ -126,7 +127,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters())
 
 
-def evaluate_model(model, test_data, batch_size, max_target_length):
+def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length, predfile):
 
     # prepare dataloader
     test_data.set_format(type='torch', columns=['input_ids', 'attention_mask'])
@@ -134,39 +135,46 @@ def evaluate_model(model, test_data, batch_size, max_target_length):
     
     # get size of model
     num_parameters = count_parameters(model)
-    
-    # time evaluation
-    if torch.cuda.is_available():
-        start = torch.cuda.Event(enable_timing=True)
-        end = torch.cuda.Event(enable_timing=True)
-    else:
-        start = time()
-    
-    # generate text for each batch
-    all_predictions = []
-    if torch.cuda.is_available():
-        start.record()
-    for batch in tqdm(dataloader, desc="Generating predictions..."):
-        input_ids = batch['input_ids'].to(model.device)
-        attention_mask = batch['attention_mask'].to(model.device)
-        predictions = model.generate(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            early_stopping=True,
-            length_penalty= 2.0,
-            max_length=max_target_length,
-            min_length=30,
-            no_repeat_ngram_size=3,
-            num_beams=4
-        )
-        all_predictions.append(predictions)
 
-    if torch.cuda.is_available():
-        end.record()
-        torch.cuda.synchronize()
-        elapsed_time = start.elapsed_time(end)
-    else:
-        elapsed_time = time() - start
+    try:
+        all_predictions = pickle.load(open(predfile, "rb"))
+        elapsed_time = 0
+    
+    except:
+        # time evaluation
+        if torch.cuda.is_available():
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+        else:
+            start = time()
+        
+        # generate text for each batch
+        all_predictions = []
+        if torch.cuda.is_available():
+            start.record()
+        for batch in tqdm(dataloader, desc="Generating predictions..."):
+            input_ids = batch['input_ids'].to(model.device)
+            attention_mask = batch['attention_mask'].to(model.device)
+            predictions = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                early_stopping=True,
+                length_penalty= 2.0,
+                max_length=max_target_length,
+                min_length=30,
+                no_repeat_ngram_size=3,
+                num_beams=4
+            )
+            all_predictions.append(predictions)
+
+        if torch.cuda.is_available():
+            end.record()
+            torch.cuda.synchronize()
+            elapsed_time = start.elapsed_time(end)
+        else:
+            elapsed_time = time() - start
+        
+        pickle.dump(all_predictions, open(predfile, "wb"))
     
     # flatten predictions
     all_predictions_flattened = [pred for preds in all_predictions for pred in preds]
@@ -174,7 +182,7 @@ def evaluate_model(model, test_data, batch_size, max_target_length):
     targets = test_data["labels"]
 
     # compute metrics
-    metric = datasets.load_metric("rouge")
+    metric = datasets.load_metric(eval_metric)
     predictions_labels = [all_predictions_flattened, targets]
     results = compute_metrics(metric, predictions_labels)
     
@@ -203,6 +211,9 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', dest='batch_size', required=False,
                         default=8, help='The batch size to be used for eval',
                         type=int)
+    parser.add_argument('--metric', dest='metric', required=False,
+                        default='rouge', help='The metric to use for evaluation',
+                        type=str)
     args = parser.parse_args()
 
     if args.model == "all":
@@ -243,13 +254,15 @@ if __name__ == '__main__':
             else:
                 pruned_model = getPrunedModel(model, is_t5, remove, args.pruning_strategy)
 
-            results = evaluate_model(pruned_model, test_data, args.batch_size, max_target_length)
+            filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
+            filename += f'-{args.pruning_strategy}-{remove}' if remove != 0 else '-baseline'
+
+            predfile = filename + '-predictions'
+            results = evaluate_model(pruned_model, args.metric, test_data, args.batch_size, max_target_length, predfile)
             
             if not os.path.isdir("results"):
                 os.makedirs("results")
-
-            filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
-            filename += f'-{args.pruning_strategy}-' + str(remove) if remove != 0 else '-baseline'
+            
             pd.Series(results).to_csv(f'results/{filename}.csv')
             print(f"Completed eval of {filename}. Results are...")
             for key, val in results.items():
