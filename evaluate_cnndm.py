@@ -195,8 +195,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', dest='model', required=False,
-                        default="all",
+                        default=["ainize/bart-base-cnn", "facebook/bart-large-cnn", "t5-base", "t5-large"],
                         help='The name of the finetuned model to evaluate.',
+                        nargs="+",
                         type=str)
     parser.add_argument('--pruning_strategy', dest='pruning_strategy', required=False,
                         default='ca-mag',
@@ -216,12 +217,7 @@ if __name__ == '__main__':
                         type=str)
     args = parser.parse_args()
 
-    if args.model == "all":
-        MODELS = ["ainize/bart-base-cnn", "facebook/bart-large-cnn", "t5-base", "t5-large"]
-    else:
-        MODELS = [args.model]
-    
-    for finetuned_model in MODELS:
+    for finetuned_model in args.model:
 
         #  Load Model and Tokenize
         tokenizer = AutoTokenizer.from_pretrained(finetuned_model)
@@ -257,7 +253,7 @@ if __name__ == '__main__':
             filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
             filename += f'-{args.pruning_strategy}-{remove}' if remove != 0 else '-baseline'
 
-            predfile = filename + '-predictions'
+            predfile = f'predictions/{filename}-predictions'
             results = evaluate_model(pruned_model, args.metric, test_data, args.batch_size, max_target_length, predfile)
             
             if not os.path.isdir("results"):
