@@ -136,8 +136,8 @@ def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length,
     # get size of model
     num_parameters = count_parameters(model)
 
-    try:
-        all_predictions = pickle.load(open(predfile, "rb"))
+    if os.path.isfile(predfile):
+        all_predictions = torch.load(open(predfile, "rb"))
         elapsed_time = 0
     
     except:
@@ -174,7 +174,8 @@ def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length,
         else:
             elapsed_time = time() - start
         
-        pickle.dump(all_predictions, open(predfile, "wb"))
+        cpu_preds = [pred.to('cpu') for pred in all_predictions]
+        torch.save(cpu_preds, predfile)
     
     # flatten predictions
     all_predictions_flattened = [pred for preds in all_predictions for pred in preds]
