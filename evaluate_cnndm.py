@@ -140,7 +140,7 @@ def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length,
         all_predictions = torch.load(open(predfile, "rb"))
         elapsed_time = 0
     
-    except:
+    else:
         # time evaluation
         if torch.cuda.is_available():
             start = torch.cuda.Event(enable_timing=True)
