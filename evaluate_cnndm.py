@@ -63,15 +63,22 @@ def compute_metrics(metric, eval_pred):
     return {k: round(v, 4) for k, v in result.items()}
 
 
-def CrossAttentionRemoval(model, is_t5, remove, strategy):
-    
+def CrossAttentionRemoval(model, is_t5, block, remove, strategy):
+    assert block in ('encoder', 'decoder'), f"Expected 'encoder' or 'decoder'. Received {block}."
     layer_weights = []
     num_layers = model.config.num_decoder_layers if is_t5 else model.config.decoder_layers
     for i in range(num_layers):
-        if is_t5:
-            weight = model.state_dict()[f"decoder.block.{i}.layer.1.EncDecAttention.o.weight"]
+        if block == 'encoder':
+            if is_t5:
+                weight = model.state_dict()[f"encoder.block.{i}.layer.0.SelfAttention.o.weight"]
+            else:
+                weight = model.state_dict()[f"model.encoder.layers.{i}.self_attn.out_proj.weight"]
+
         else:
-            weight = model.state_dict()[f"model.decoder.layers.{i}.encoder_attn.out_proj.weight"]
+            if is_t5:
+                weight = model.state_dict()[f"decoder.block.{i}.layer.1.EncDecAttention.o.weight"]
+            else:
+                weight = model.state_dict()[f"model.decoder.layers.{i}.encoder_attn.out_proj.weight"]
         
         if strategy == 'mag':
             avg_abs_weight = torch.mean(torch.abs(weight)).item()
@@ -90,34 +97,52 @@ def CrossAttentionRemoval(model, is_t5, remove, strategy):
     return remove_layers
 
 
-def TopRemoval(model, is_t5, remove):
-    num_layers = model.config.num_decoder_layers if is_t5 else model.config.decoder_layers
+def TopRemoval(model, is_t5, block, remove):
+    assert block in ('encoder', 'decoder'), f"Expected 'encoder' or 'decoder'. Received {block}."
+    if block == 'decoder':
+        num_layers = model.config.num_decoder_layers if is_t5 else model.config.decoder_layers
+    else:
+        num_layers = model.config.num_layers if is_t5 else model.config.encoder_layers
+    
     excl_layers = math.ceil(num_layers * remove)
     remove_layers = set(range(num_layers-1, num_layers -1 - excl_layers, -1))
     print(f"Original number of layers: {num_layers}\tRemoving the following top layers: {remove_layers}")
     return remove_layers
 
     
-def getPrunedModel(orig_model, is_t5, remove, strategy):
-    
+def getPrunedModel(orig_model, is_t5, block, remove, strategy):
+    assert block in ('encoder', 'decoder'), f"Expected 'encoder' or 'decoder'. Received {block}."
+
     if strategy == 'ca-mag':
-        remove_layers = CrossAttentionRemoval(orig_model, is_t5, remove, 'mag')
+        remove_layers = CrossAttentionRemoval(orig_model, is_t5, block, remove, 'mag')
     elif strategy == 'ca-var':
-        remove_layers = CrossAttentionRemoval(orig_model, is_t5, remove, 'var')
+        remove_layers = CrossAttentionRemoval(orig_model, is_t5, block, remove, 'var')
     else:
         assert strategy == 'top'
-        remove_layers = TopRemoval(orig_model, is_t5, remove)
+        remove_layers = TopRemoval(orig_model, is_t5, block, remove)
     
-    current_dec_layers = orig_model.decoder.block if is_t5 else orig_model.model.decoder.layers
-    new_dec_layers = nn.ModuleList([current_dec_layers[i] for i in range(len(current_dec_layers)) if i not in remove_layers])
+    if block == 'decoder':
+        current_layers = orig_model.decoder.block if is_t5 else orig_model.model.decoder.layers
+    else:
+        current_layers = orig_model.encoder.block if is_t5 else orig_model.model.encoder.layers
+    
+    new_layers = nn.ModuleList([current_layers[i] for i in range(len(current_layers)) if i not in remove_layers])
     
     new_model = copy.deepcopy(orig_model)
     if is_t5:
-        new_model.decoder.block = new_dec_layers
-        assert len(new_model.decoder.block) + len(remove_layers) == len(orig_model.decoder.block)
+        if block == 'decoder':
+            new_model.decoder.block = new_layers
+            assert len(new_model.decoder.block) + len(remove_layers) == len(orig_model.decoder.block)
+        else:
+            new_model.encoder.block = new_layers
+            assert len(new_model.encoder.block) + len(remove_layers) == len(orig_model.encoder.block)
     else:
-        new_model.model.decoder.layers = new_dec_layers
-        assert len(new_model.model.decoder.layers) + len(remove_layers) == len(orig_model.model.decoder.layers)
+        if block == 'decoder':
+            new_model.model.decoder.layers = new_layers
+            assert len(new_model.model.decoder.layers) + len(remove_layers) == len(orig_model.model.decoder.layers)
+        else:
+            new_model.model.encoder.layers = new_layers
+            assert len(new_model.model.encoder.layers) + len(remove_layers) == len(orig_model.model.encoder.layers)
     
     new_model = new_model.to(orig_model.device)
     new_model.eval()
@@ -202,6 +227,10 @@ if __name__ == '__main__':
                         help='The name of the finetuned model to evaluate.',
                         nargs="+",
                         type=str)
+    parser.add_argument('--pruning_block', dest='pruning_block', required=True,
+                        choices=['encoder', 'decoder'],
+                        help='Whether to prune from the encoder or decoder.',
+                        type=str)
     parser.add_argument('--pruning_strategy', dest='pruning_strategy', required=False,
                         default='ca-mag',
                         choices=['ca-mag', 'ca-var', 'top'],
@@ -251,10 +280,10 @@ if __name__ == '__main__':
             if remove == 0:
                 pruned_model = model
             else:
-                pruned_model = getPrunedModel(model, is_t5, remove, args.pruning_strategy)
+                pruned_model = getPrunedModel(model, is_t5, args.pruning_block, remove, args.pruning_strategy)
 
             filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
-            filename += f'-{args.pruning_strategy}-{remove}' if remove != 0 else '-baseline'
+            filename += f'-{args.pruning_block}-{args.pruning_strategy}-{remove}' if remove != 0 else f'-{args.pruning_block}-baseline'
 
             predfile = f'predictions/{filename}-predictions'
             results = evaluate_model(pruned_model, args.metric, test_data, args.batch_size, max_target_length, predfile)
