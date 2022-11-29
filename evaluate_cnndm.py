@@ -78,7 +78,7 @@ def CrossAttentionRemoval(model, is_t5, remove, strategy):
             layer_weights.append((i, avg_abs_weight))
         elif strategy == 'var':
             var_weights = torch.var(weight).item()
-            layer_weights.append((i, var_weight))
+            layer_weights.append((i, var_weights))
         else:
             print(f"Wrong input for type. Expected 'mag' or 'var', received '{strategy}''.")
             return
@@ -86,13 +86,15 @@ def CrossAttentionRemoval(model, is_t5, remove, strategy):
     layer_weights.sort(key = lambda x: x[1])
     excl_layers = math.ceil(num_layers * remove)
     remove_layers = set([l for l, a in layer_weights[:excl_layers]])
+    print(f"Original number of layers: {num_layers}\tRemoving the following layers: {remove_layers}")
     return remove_layers
 
 
 def TopRemoval(model, is_t5, remove):
     num_layers = model.config.num_decoder_layers if is_t5 else model.config.decoder_layers
     excl_layers = math.ceil(num_layers * remove)
-    remove_layers = set(range(excl_layers))
+    remove_layers = set(range(num_layers-1, num_layers -1 - excl_layers, -1))
+    print(f"Original number of layers: {num_layers}\tRemoving the following top layers: {remove_layers}")
     return remove_layers
 
     
@@ -140,7 +142,7 @@ def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length,
         all_predictions = torch.load(open(predfile, "rb"))
         elapsed_time = 0
     
-    except:
+    else:
         # time evaluation
         if torch.cuda.is_available():
             start = torch.cuda.Event(enable_timing=True)
