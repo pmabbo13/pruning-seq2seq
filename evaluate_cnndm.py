@@ -223,7 +223,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', dest='model', required=False,
-                        default=["ainize/bart-base-cnn", "facebook/bart-large-cnn", "t5-base", "t5-large"],
+                        default=["ainize/bart-base-cnn", "facebook/bart-large-cnn", "Chikashi/t5-small-finetuned-cnndm", "t5-base"],
                         help='The name of the finetuned model to evaluate.',
                         nargs="+",
                         type=str)
