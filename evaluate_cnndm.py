@@ -164,6 +164,7 @@ def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length,
     num_parameters = count_parameters(model)
 
     if os.path.isfile(predfile):
+        print(f"{predfile} already exists. Evaluating against these predictions.")
         all_predictions = torch.load(open(predfile, "rb"))
         elapsed_time = 0
     
@@ -283,7 +284,10 @@ if __name__ == '__main__':
                 pruned_model = getPrunedModel(model, is_t5, args.pruning_block, remove, args.pruning_strategy)
 
             filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
-            filename += f'-{args.pruning_block}-{args.pruning_strategy}-{remove}' if remove != 0 else f'-{args.pruning_block}-baseline'
+            if args.pruning_block == 'encoder':
+                filename += f'-{args.pruning_block}-{args.pruning_strategy}-{remove}' if remove != 0 else f'-baseline'
+            else:
+                filename += f'-{args.pruning_strategy}-{remove}' if remove != 0 else f'-baseline'
 
             predfile = f'predictions/{filename}-predictions'
             results = evaluate_model(pruned_model, args.metric, test_data, args.batch_size, max_target_length, predfile)
