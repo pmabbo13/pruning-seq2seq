@@ -2,6 +2,7 @@ import argparse
 
 import datasets
 import numpy as np
+import torch
 import nltk
 nltk.download('punkt')
 
@@ -10,14 +11,14 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSe
 
 # code takes inspiration from huggingface tutorial for finetuneing t5 for summarization: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
 
-def preprocessData(tokenizer, prefix, max_input_length, max_target_length, examples):
+def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
     inputs = [prefix + doc for doc in examples["article"]]
-    model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt")
+    model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt").to(device)
 
     # Setup the tokenizer for targets
     with tokenizer.as_target_tokenizer():
         labels = tokenizer(examples["highlights"], padding="longest", max_length=max_target_length, truncation=True, return_tensors="pt").input_ids
-        #labels[labels == tokenizer.pad_token_id] = -100
+        labels = labels.to(device)
 
     model_inputs["labels"] = labels
     return model_inputs
@@ -70,6 +71,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     is_t5 = args.pretrained_model[:3] == 't5-'
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    print(f"Training on {device}")
     
     # Load raw data
     raw_data = datasets.load_dataset('cnn_dailymail', '3.0.0')
@@ -80,7 +83,7 @@ if __name__ == '__main__':
     max_target_length = 200
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model)
     processed_data = raw_data.map(
-        partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length),
+        partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length, device),
         batched=True
     )
     train_sample = processed_data["train"]
@@ -116,6 +119,9 @@ if __name__ == '__main__':
 
     # get original model and train/val samples
     model = AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
+    model = model.to(device)
+    model = model.train()
+
 
     # train model
     data_collator = DataCollatorForSeq2Seq(tokenizer, model=model)
