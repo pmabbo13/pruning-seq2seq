@@ -8,6 +8,7 @@ nltk.download('punkt')
 from functools import partial
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
+# code takes inspiration from huggingface tutorial for finetuneing t5 for summarization: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, examples):
     inputs = [prefix + doc for doc in examples["article"]]
@@ -54,14 +55,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--orig_model', dest='pretrained_model', required=True,
-                        choices=['t5-base', 't5-large', 'bart', 'bart-large'],
+                        choices=['t5-base', 't5-small', 'bart-base', 'bart-large'],
                         help='The name of the pre-trained model to fine-tune.',
                         type=str)
     parser.add_argument('--batch_size', dest='batch_size', required=False,
                         default=8, help='The batch size to be used for training',
                         type=int)
     parser.add_argument('--learning_rate', dest='learning_rate', required=False,
-                        default=1e-5, help='The learning rate to be used for training',
+                        default=2e-5, help='The learning rate to be used for training',
                         type=float)
     parser.add_argument('--save_steps', dest='save_steps', required=False,
                         default=3418, help='Number of steps of training until checkpoint if saved',
@@ -82,6 +83,8 @@ if __name__ == '__main__':
         partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length),
         batched=True
     )
+    train_sample = processed_data["train"]
+    val_sample = processed_data["validation"]
 
     # set up training arguments
     ft_model_name = f"{args.pretrained_model}-cnndm"
@@ -95,35 +98,31 @@ if __name__ == '__main__':
         save_strategy="steps",
         save_steps=args.save_steps,
         learning_rate=args.learning_rate,
-        optim="adafactor",
-        lr_scheduler_type="constant",
-        per_device_train_batch_size=4,
-        gradient_accumulation_steps=args.batch_size/4,
+        #optim="adafactor",
+        lr_scheduler_type="linear",
+        per_device_train_batch_size=args.batch_size,
+        # gradient_accumulation_steps=args.batch_size/4,
         per_device_eval_batch_size=args.batch_size,
-        weight_decay=0.0,
+        #weight_decay=0.0,
         save_total_limit=1,
-        num_train_epochs=2,
+        num_train_epochs=1,
         predict_with_generate=True,
         fp16=True,
-        gradient_checkpointing=True,
+        #gradient_checkpointing=True,
         load_best_model_at_end=True,
         metric_for_best_model="rouge1",
         report_to="tensorboard"
     )
 
     # get original model and train/val samples
-    def model_init():
-        return AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
-    
-    train_sample = processed_data["train"]
-    val_sample = processed_data["validation"]
+    model = AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
 
     # train model
-    data_collator = DataCollatorForSeq2Seq(tokenizer)
+    data_collator = DataCollatorForSeq2Seq(tokenizer, model=model)
     metric = datasets.load_metric("rouge")
     trainer = Seq2SeqTrainer(
-        model_init=model_init,
-        args=train_args,
+        model,
+        train_args,
         train_dataset=train_sample,
         eval_dataset=val_sample,
         data_collator=data_collator,
