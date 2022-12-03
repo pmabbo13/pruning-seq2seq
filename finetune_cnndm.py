@@ -66,7 +66,7 @@ if __name__ == '__main__':
                         default=2e-5, help='The learning rate to be used for training',
                         type=float)
     parser.add_argument('--save_steps', dest='save_steps', required=False,
-                        default=3418, help='Number of steps of training until checkpoint if saved',
+                        default=3589, help='Number of steps of training until checkpoint if saved',
                         type=int)
     args = parser.parse_args()
 
