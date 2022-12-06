@@ -1,0 +1,8 @@
+,0
+rouge1,40.6694
+rouge2,17.57
+rougeL,27.6268
+rougeLsum,37.8284
+gen_len,69.2215
+eval_time,5540556.0
+model_size,208744704.0
