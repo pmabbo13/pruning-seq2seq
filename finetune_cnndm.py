@@ -68,6 +68,9 @@ if __name__ == '__main__':
     parser.add_argument('--save_steps', dest='save_steps', required=False,
                         default=3589, help='Number of steps of training until checkpoint if saved',
                         type=int)
+    parser.add_argument('--epochs', dest='epochs', required=False,
+                        default=1, help='Number of training epochs',
+                        type=int)
     args = parser.parse_args()
 
     is_t5 = args.pretrained_model[:3] == 't5-'
@@ -101,17 +104,13 @@ if __name__ == '__main__':
         save_strategy="steps",
         save_steps=args.save_steps,
         learning_rate=args.learning_rate,
-        #optim="adafactor",
         lr_scheduler_type="linear",
         per_device_train_batch_size=args.batch_size,
-        # gradient_accumulation_steps=args.batch_size/4,
         per_device_eval_batch_size=args.batch_size,
-        #weight_decay=0.0,
-        save_total_limit=1,
-        num_train_epochs=1,
+        save_total_limit=3,
+        num_train_epochs=args.epochs,
         predict_with_generate=True,
         fp16=True,
-        #gradient_checkpointing=True,
         load_best_model_at_end=True,
         metric_for_best_model="rouge1",
         report_to="tensorboard"
