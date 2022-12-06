@@ -18,7 +18,7 @@ import nltk
 nltk.download('punkt')
 
 import datasets
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizerFast
 
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
@@ -223,12 +223,19 @@ def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length,
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', dest='model', required=False,
-                        default=["ainize/bart-base-cnn", "facebook/bart-large-cnn", "Chikashi/t5-small-finetuned-cnndm", "t5-base"],
-                        help='The name of the finetuned model to evaluate.',
+    parser.add_argument('--hf_model', dest='hf_model', required=False,
+                        default=[],
+                        choices = ["ainize/bart-base-cnn", "facebook/bart-large-cnn", "Chikashi/t5-small-finetuned-cnndm", "t5-base"],
+                        help='The name of the finetuned model to load from Huggingface.',
                         nargs="+",
                         type=str)
-    parser.add_argument('--pruning_block', dest='pruning_block', required=True,
+    parser.add_argument('--checkpoint', dest='checkpoint', required=False,
+                        default=[],
+                        help='The filepath to the checkpoint of the finetuned model to load.',
+                        nargs="+",
+                        type=str)
+    parser.add_argument('--pruning_block', dest='pruning_block', required=False,
+                        default='decoder',
                         choices=['encoder', 'decoder'],
                         help='Whether to prune from the encoder or decoder.',
                         type=str)
@@ -249,21 +256,31 @@ if __name__ == '__main__':
                         default='rouge', help='The metric to use for evaluation',
                         type=str)
     args = parser.parse_args()
-
-    for finetuned_model in args.model:
+    
+    models = args.hf_model + args.checkpoint
+    for finetuned_model in models:
 
         #  Load Model and Tokenize
-        tokenizer = AutoTokenizer.from_pretrained(finetuned_model)
-        model = AutoModelForSeq2SeqLM.from_pretrained(finetuned_model)
+        if finetuned_model in args.hf_model:
+            tokenizer = AutoTokenizer.from_pretrained(finetuned_model)
+            model = AutoModelForSeq2SeqLM.from_pretrained(finetuned_model)
+
+            if '/' in finetuned_model:
+                is_t5 = 't5-' == finetuned_model.split("/")[1][:3] 
+            else:
+                is_t5 = 't5-' == finetuned_model[:3]
+
+        else:
+            architecture = finetuned_model.split('/')[0][:-6]
+            tokenizer = AutoTokenizer.from_pretrained(architecture)
+            model = AutoModelForSeq2SeqLM.from_pretrained(architecture)
+            model.load_state_dict(torch.load(f"{finetuned_model}/pytorch_model.bin"))
+            is_t5 = 't5-' == finetuned_model[:3]
+
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         model = model.to(device)
         model = model.eval()
         
-        if '/' in finetuned_model:
-            is_t5 = 't5-' == finetuned_model.split("/")[1][:3] 
-        else:
-            is_t5 = 't5-' == finetuned_model[:3]
-
         # Load raw data
         raw_data = datasets.load_dataset('cnn_dailymail', '3.0.0', split="test")
 
