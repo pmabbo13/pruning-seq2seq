@@ -1,8 +1,8 @@
 ,0
-rouge1,43.0478
+rouge1,43.05
 rouge2,20.3372
-rougeL,30.2189
-rougeLsum,39.94
+rougeL,30.2153
+rougeLsum,39.931
 gen_len,79.0633
-eval_time,6465667.0
+eval_time,6339396.5
 model_size,222903552.0
