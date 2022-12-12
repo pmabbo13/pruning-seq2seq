@@ -1,9 +1,13 @@
 # pruning-seq2seq
 
-Larger NLP models tend to perform better on a variety of discriminative and generative tasks, however running inference on models with millions and billions of parameters comes at a computational and memory cost. Empirical research has shown that sub-networks exist within feed-forward, convolution, and encoder-only transformer models such that time and memory constraints can be significantly reduced while maintaining comparable test performance to their original models. Our research investigates layer pruning strategies on transformer-based sequence-to-sequence models to identify whether these sub-networks exist for the language generation task of abstractive summarization. Our results show minor tolerance to our pruning strategies and highlight the shortcomings of systematic metrics when evaluating pruned models.
+This library explores layer pruning strategies on transformer-based sequence-to-sequence models to identify whether we can achieve comparable task performance on abstractive summarization using smaller derivatives of BART and T5 models. The pruning stragies considered are:
+
+1. Removing layers with the lowest average magnitude of weights applied to their cross-attention outputs
+2. Remove layers from the top downards on the model's decoder
+3. Remove layer from the top downards on the model's encoder
 
 ## Data
-We use the CNNDM dataset (sourced from Hugging Face's `datasets` libraryr) to train and evaluate our models for abstractive text summarization. This dataset sources news articles from CNN and Daily Mail, and uses their accompanying bulleted highlights to construct a summary of the article. The sentences of the bulleted highlights are concatenated together in order of appearance to construct the target summary. We process the input articles by tokenizing and truncating them to a maximum length of 512. The target summaries are also tokenized and truncated to a maximum length of 200. The resulting corpus has around 280k training pairs, 13k validation pairs and 11k test pairs. The article texts average at 766 words and 29.74 sentences. The summaries average at 53 words and 3.72 sentences. 
+We use the CNNDM dataset (sourced from Hugging Face's `datasets` library) to train and evaluate our models for abstractive text summarization. We process the input articles by tokenizing and truncating them to a maximum length of 512. The target summaries are also tokenized and truncated to a maximum length of 200.
 
 ## Models
 We use [BART-base](https://huggingface.co/ainize/bart-base-cnn), [BART-large](https://huggingface.co/facebook/bart-large-cnn), and [T5-small](https://huggingface.co/Chikashi/t5-small-finetuned-cnndm) models that have already been fine-tuned on the task and made publicly available through Hugging Face's `transformers` library. We also use a pre-trained [T5-base](https://huggingface.co/t5-base) model and fine-tune it ourselves using our `finetune_cnndm.py` script.
