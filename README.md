@@ -9,6 +9,8 @@ This library explores layer pruning strategies on transformer-based sequence-to-
 ## Data
 We use the CNNDM dataset (sourced from Hugging Face's `datasets` library) to train and evaluate our models for abstractive text summarization. We process the input articles by tokenizing and truncating them to a maximum length of 512. The target summaries are also tokenized and truncated to a maximum length of 200.
 
+Download and preprocessing steps occur within our training script `finetune_cnndm.py` for the training and dev sets. The test set is downloaded and pre-processed within our evaluation scripts `evaluate_cnndm.py` and `bertscore.py`.
+
 ## Models
 We use [BART-base](https://huggingface.co/ainize/bart-base-cnn), [BART-large](https://huggingface.co/facebook/bart-large-cnn), and [T5-small](https://huggingface.co/Chikashi/t5-small-finetuned-cnndm) models that have already been fine-tuned on the task and made publicly available through Hugging Face's `transformers` library. We also use a pre-trained [T5-base](https://huggingface.co/t5-base) model and fine-tune it ourselves using our `finetune_cnndm.py` script.
 We take advantage of Hugging Face's `transformers.Seq2SeqTrainingArguments` and `transformers.Seq2SeqTrainer` methods to train these models.
@@ -24,7 +26,7 @@ We take advantage of Hugging Face's `transformers.Seq2SeqTrainingArguments` and 
     transformers
     
 
-## Scripts
+## Model Training
 `finetune_cnndm.py` is used to fine-tune an input pre-trained model on the CNNDM dataset for the task of abstractive summarization. Our training implementation is slightly modified from the training instructions provided in [this Hugging Face tutorial](https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb).
 
 We describe the script's input parameters below:
@@ -37,9 +39,9 @@ We describe the script's input parameters below:
 
 We used the following command to fine-tune the pre-trained t5-base model:
   
-  `finetune_cnndm.py --orig_model t5-base --batch_size 8 --learning_rate 2e-05 --epochs 1 --save_steps 3489`
+  `python finetune_cnndm.py --orig_model t5-base --batch_size 8 --learning_rate 2e-05 --epochs 1 --save_steps 3489`
 
-----
+## Model Experimentation & Evaluation
 
 `evaluate_cnndm.py` is used to apply a given layer pruning technique to the its input model and evaluate it against the test set of the CNNDM dataset. It computes the model's ROUGE scores, average length of each summary, the total time taken to generate the summaries, and the number of parameters in the model. A report of these results is saved in the `results ` directory. It also saves the predicted sequences in the `predictions` summary so that we can perform manual inspections of the sequences and also evaluate them against other metrics if we wish.
 
@@ -55,7 +57,7 @@ We describe the script's input parameters below:
 
 We used the following command to evaluate the fine-tuned bart-large model using a top-down strategy on the decoder at pruning percentages of 0 (i.e. baseline), 10%, 25%, and 50%.
   
-  `evaluate_cnndm.py --hf_model facebook/bart-large-cnn --pruning_block decoder --pruning_strategy top --pruning_schedule 0.0 0.1 0.25 0.5 --batch_size 8 --metric rouge`
+  `python evaluate_cnndm.py --hf_model facebook/bart-large-cnn --pruning_block decoder --pruning_strategy top --pruning_schedule 0.0 0.1 0.25 0.5 --batch_size 8 --metric rouge`
   
   
 ----
@@ -72,5 +74,5 @@ It takes the following input parameters to locate the corresponding predictions 
     
 We used the follwoing command to compute the BERTScore values for the fine-tuned bart-large model using a top-down strategy on the decoder at pruning percentages of 0 (i.e. baseline), 10%, 25%, and 50%.
 
-  `bertscore.py --hf_model facebook/bart-large-cnn --pruning_block decoder --pruning_strategy top --pruning_schedule 0.0 0.1 0.25 0.5`
+  `python bertscore.py --hf_model facebook/bart-large-cnn --pruning_block decoder --pruning_strategy top --pruning_schedule 0.0 0.1 0.25 0.5`
   
