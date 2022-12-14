@@ -41,7 +41,7 @@ We used the following command to fine-tune the pre-trained t5-base model:
   
   `python finetune_cnndm.py --orig_model t5-base --batch_size 8 --learning_rate 2e-05 --epochs 1 --save_steps 3489`
 
-## Model Experimentation & Evaluation
+## Experimentation & Evaluation
 
 `evaluate_cnndm.py` is used to apply a given layer pruning technique to the its input model and evaluate it against the test set of the CNNDM dataset. It computes the model's ROUGE scores, average length of each summary, the total time taken to generate the summaries, and the number of parameters in the model. A report of these results is saved in the `results ` directory. It also saves the predicted sequences in the `predictions` summary so that we can perform manual inspections of the sequences and also evaluate them against other metrics if we wish.
 
