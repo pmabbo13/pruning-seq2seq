@@ -2,7 +2,7 @@
 
 This library explores layer pruning strategies on transformer-based sequence-to-sequence models to identify whether we can achieve comparable task performance on abstractive summarization using smaller derivatives of BART and T5 models. The pruning stragies considered are:
 
-1. Removing layers with the lowest average magnitude of weights applied to their cross-attention outputs
+1. Removing layers with the lowest average magnitude of weights applied to the decoder's cross-attention outputs
 2. Remove layers from the top downards on the model's decoder
 3. Remove layer from the top downards on the model's encoder
 
@@ -35,7 +35,7 @@ We describe the script's input parameters below:
     --batch_size: The batch size used during training
     --learning_rate: The learning rate used during training
     --epochs: The number of training epochs
-    --save_steps: The number of optimization steps to occur before the model is evaluated against the validation set and the checkpoint is saved if it is the best performing checkpoint thus far in the training process
+    --save_steps: The number of optimization steps before the model is evaluated against the validation set. The checkpoint is saved if it achieves the best ROUGE score thus far.
 
 We used the following command to fine-tune the pre-trained t5-base model:
   
