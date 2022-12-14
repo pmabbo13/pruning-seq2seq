@@ -15,6 +15,11 @@ import nltk
 nltk.download('punkt')
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
+    """
+    Preprocess CNNDM examples.
+    Taken from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    """
+    
     inputs = [prefix + doc for doc in examples["article"]]
     model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt").to(device)
 
@@ -58,7 +63,7 @@ def compute_metrics(metric, eval_pred):
     result["gen_len"] = np.mean(prediction_lens)
     result['eval_time'] = elapsed_time
     
-    return result #{k: round(v, 4) for k, v in result.items()}
+    return result
 
 
 if __name__ == '__main__':
@@ -96,7 +101,7 @@ if __name__ == '__main__':
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
     for finetuned_model in models:
-        #  Load Model and Tokenize
+        #  Load model and tokenizer
         if finetuned_model in args.hf_model:
             tokenizer = AutoTokenizer.from_pretrained(finetuned_model)
             if '/' in finetuned_model:
@@ -109,7 +114,10 @@ if __name__ == '__main__':
             tokenizer = AutoTokenizer.from_pretrained(architecture)
             is_t5 = 't5-' == finetuned_model[:3]
 
+        # evalute each pruning model
         for remove in args.pruning_schedule:
+            
+            # create filename to store model results and predictions
             filename = finetuned_model.split('/')[1] if '/' in finetuned_model else finetuned_model
             if args.pruning_block == 'encoder':
                 filename += f'-{args.pruning_block}-{args.pruning_strategy}-{remove}' if remove != 0 else f'-baseline'
@@ -147,10 +155,11 @@ if __name__ == '__main__':
             predictions_labels = [all_predictions_flattened, targets]
             results = compute_metrics(metric, predictions_labels)
             
+            # store results
             if not os.path.isdir("results/bertscore"):
                 os.makedirs("results/bertscore")
-
             pd.Series(results).to_csv(f'results/bertscore/{filename}.csv')
+            
             print(f"Completed eval of {filename}. Results are...")
             for key, val in results.items():
                 print(f"\t{key}: {val}")

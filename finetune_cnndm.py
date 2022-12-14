@@ -9,9 +9,14 @@ nltk.download('punkt')
 from functools import partial
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
-# code takes inspiration from huggingface tutorial for finetuneing t5 for summarization: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+# script is only slightly modified from huggingface tutorial for finetuneing t5 for summarization:
+# https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
+    """
+    Preprocess CNNDM examples
+    """
+
     inputs = [prefix + doc for doc in examples["article"]]
     model_inputs = tokenizer(inputs, padding="longest", max_length=max_input_length, truncation=True, return_tensors="pt").to(device)
 
@@ -120,7 +125,6 @@ if __name__ == '__main__':
     model = AutoModelForSeq2SeqLM.from_pretrained(args.pretrained_model)
     model = model.to(device)
     model = model.train()
-
 
     # train model
     data_collator = DataCollatorForSeq2Seq(tokenizer, model=model)
