@@ -324,7 +324,6 @@ if __name__ == '__main__':
             partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length, device),
             batched=True
         )
-        test_data = test_data.select(range(8))
 
         # evalute each pruning model
         for remove in args.pruning_schedule:
