@@ -33,6 +33,11 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, devic
 
 
 def compute_metrics(metric, eval_pred):
+    """
+    Compute BERTScore scores for predicted and target summaries.
+    Modified from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    """
+
     # time evaluation
     start = time()
 

@@ -40,6 +40,11 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, devic
 
 
 def compute_metrics(metric, eval_pred):
+    """
+    Compute ROUGE scores for predicted and target summaries.
+    Modified from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    """
+
     predictions, labels = eval_pred
     decoded_preds = tokenizer.batch_decode(predictions, skip_special_tokens=True)
     
@@ -317,6 +322,7 @@ if __name__ == '__main__':
             partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length, device),
             batched=True
         )
+        test_data = test_data.select(range(8))
 
         # evalute each pruning model
         for remove in args.pruning_schedule:
