@@ -17,7 +17,7 @@ nltk.download('punkt')
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
     """
     Preprocess CNNDM examples.
-    Taken from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    TAKEN FROM PREPROCESS FUNCTION IN: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
     """
     
     inputs = [prefix + doc for doc in examples["article"]]
@@ -35,7 +35,7 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, devic
 def compute_metrics(metric, eval_pred):
     """
     Compute BERTScore scores for predicted and target summaries.
-    Modified from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    TAKEN FROM COMPUTE_METRICS FUNCTION IN: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
     """
 
     # time evaluation

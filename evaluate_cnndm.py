@@ -13,18 +13,17 @@ from typing import List
 
 import torch
 import torch.nn as nn
-from torch.utils.data.dataloader import default_collate
 import nltk
 nltk.download('punkt')
 
 import datasets
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, PreTrainedTokenizerFast
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
     """
     Preprocess CNNDM examples.
-    Taken from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    TAKEN FROM PREPROCESS FUNCTION IN: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
     """
     
     inputs = [prefix + doc for doc in examples["article"]]
@@ -42,7 +41,7 @@ def preprocessData(tokenizer, prefix, max_input_length, max_target_length, devic
 def compute_metrics(metric, eval_pred):
     """
     Compute ROUGE scores for predicted and target summaries.
-    Modified from preprocess_function in https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
+    TAKEN FROM COMPUTE_METRICS FUNCTION IN: https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
     """
 
     predictions, labels = eval_pred
@@ -184,6 +183,9 @@ def count_parameters(model):
 
 
 def evaluate_model(model, eval_metric, test_data, batch_size, max_target_length, predfile):
+    """
+    Evaluates model on test data.
+    """
 
     # prepare dataloader
     test_data.set_format(type='torch', columns=['input_ids', 'attention_mask'])
@@ -322,6 +324,7 @@ if __name__ == '__main__':
             partial(preprocessData, tokenizer, prefix, max_input_length, max_target_length, device),
             batched=True
         )
+        test_data = test_data.select(range(8))
 
         # evalute each pruning model
         for remove in args.pruning_schedule:

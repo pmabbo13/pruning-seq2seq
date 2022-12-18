@@ -9,7 +9,7 @@ nltk.download('punkt')
 from functools import partial
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, DataCollatorForSeq2Seq, Seq2SeqTrainingArguments, Seq2SeqTrainer
 
-# script is only slightly modified from huggingface tutorial for finetuneing t5 for summarization:
+# ENTIRE SCRIPT IS MODIFIED FROM HUGGINGFACE TUTORIAL FOR FINETUNING T5 MODEL FOR SUMMARIZATION:
 # https://github.com/huggingface/notebooks/blob/main/examples/summarization.ipynb
 
 def preprocessData(tokenizer, prefix, max_input_length, max_target_length, device, examples):
